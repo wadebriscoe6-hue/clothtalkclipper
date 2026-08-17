@@ -1,0 +1,122 @@
+import streamlit as st
+import os
+import tempfile
+import time
+from video_processor import process_video_clip, get_video_duration, check_ffmpeg
+
+st.set_page_config(page_title="Cloth Talk Video Clipper & B-Roll Hub", page_icon="🎬", layout="wide")
+
+st.title("🎬 Cloth Talk - Free AI Video Clipper & B-Roll Hub")
+st.caption("A 100% free, private web app to trim, reframe to 9:16 vertical, add viral hooks, and find public domain B-roll.")
+
+if not check_ffmpeg():
+    st.error("⚠️ FFmpeg is not detected. Ensure FFmpeg is installed on your system or container.")
+
+tab_clipper, tab_broll = st.tabs(["✂️ Video Clipper & 9:16 Formatter", "🌌 Free Public B-Roll & Archival Assets"])
+
+with tab_clipper:
+    col_main, col_side = st.columns([2, 1])
+
+    with col_side:
+        st.subheader("⚡ Quick Hook Ideas")
+        st.info(
+            "**Documentary Hooks:**\n\n"
+            "1. *'The 241,200 Year Mystery Nobody Can Explain...'* \n"
+            "2. *'What archaeologists found inside this ancient tablet...'* \n"
+            "3. *'The real reason their reigns dropped after the flood.'*"
+        )
+        st.markdown("---")
+        st.subheader("⚙️ Video Settings")
+        style_choice = st.radio(
+            "9:16 Vertical Style:",
+            ["Blurred Background (Recommended for 16:9)", "Center Crop"],
+            help="Blurred Background scales 16:9 widescreen footage cleanly without cutting off the sides."
+        )
+        style_code = "blur_bg" if "Blurred" in style_choice else "center_crop"
+
+    with col_main:
+        uploaded_file = st.file_uploader("Upload Raw Footage or Documentary (MP4, MOV, WebM, MKV):", type=["mp4", "mov", "webm", "mkv"])
+
+        if uploaded_file is not None:
+            tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+            tfile.write(uploaded_file.read())
+            tfile.flush()
+            input_path = tfile.name
+
+            duration = get_video_duration(input_path)
+
+            st.subheader("📹 Source Video Preview")
+            st.video(input_path)
+            if duration > 0:
+                st.write(f"**Total Video Length:** {int(duration // 60)}m {int(duration % 60)}s ({duration:.1f}s)")
+
+            st.subheader("✂️ Clip & Text Settings")
+            c_start, c_end = st.columns(2)
+            with c_start:
+                start_time = st.number_input("Start Time (seconds):", min_value=0.0, max_value=max(duration - 1.0, 10000.0), value=0.0, step=1.0)
+            with c_end:
+                default_end = min(start_time + 45.0, duration if duration > 0 else start_time + 45.0)
+                end_time = st.number_input("End Time (seconds):", min_value=start_time + 1.0, max_value=max(duration, 10000.0), value=default_end, step=1.0)
+
+            st.caption(f"⏱️ **Target Clip Duration:** {end_time - start_time:.1f} seconds")
+
+            top_title = st.text_input("Top Title / Banner Text (Optional):", value="SUMERIAN KING LIST")
+            bottom_sub = st.text_input("Bottom Hook / Question (Optional):", value="241,200 Years of Rule?")
+
+            if st.button("🚀 Render 9:16 TikTok Clip", type="primary", use_container_width=True):
+                output_path = os.path.join(tempfile.gettempdir(), f"cloth_talk_clip_{int(time.time())}.mp4")
+                with st.spinner("Processing vertical video and rendering overlays..."):
+                    try:
+                        process_video_clip(
+                            input_path=input_path,
+                            output_path=output_path,
+                            start_sec=start_time,
+                            end_sec=end_time,
+                            style=style_code,
+                            top_title=top_title,
+                            bottom_subtitle=bottom_sub
+                        )
+                        st.success("✅ Clip rendered successfully!")
+                        st.subheader("📱 Export Preview")
+                        st.video(output_path)
+
+                        with open(output_path, "rb") as f:
+                            clip_bytes = f.read()
+
+                        st.download_button(
+                            label="⬇️ Download TikTok Clip (MP4)",
+                            data=clip_bytes,
+                            file_name="clothtalk_tiktok_clip.mp4",
+                            mime="video/mp4",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"Rendering failed: {str(e)}")
+        else:
+            st.info("👆 Upload any video file above to start clipping and formatting.")
+
+with tab_broll:
+    st.header("🌌 Free Public Domain & Royalty-Free B-Roll Finder")
+    st.markdown("Search and download 100% free B-roll footage for your documentaries, space concepts, ancient history, and cinematic backgrounds.")
+
+    search_query = st.text_input("Search B-Roll Topic (e.g., 'Ancient Ruins', 'Desert Mesopotamia', 'Galaxy Universe', 'Clay Tablet'):", value="Ancient Ruins")
+
+    c1, c2, c3 = st.columns(3)
+    encoded_q = search_query.replace(" ", "%20")
+
+    with c1:
+        st.markdown("### 🏛️ Archival & Historical")
+        st.markdown(f"- [🏛️ **Internet Archive Video**](https://archive.org/search.php?query={encoded_q}&sin=TXT&and[]=mediatype%3A%22movies%22)")
+        st.markdown(f"- [📜 **Wikimedia Commons Video**](https://commons.wikimedia.org/w/index.php?search={encoded_q}&title=Special:MediaSearch&type=video)")
+        st.markdown(f"- [🏺 **Library of Congress**](https://www.loc.gov/collections/?q={encoded_q})")
+
+    with c2:
+        st.markdown("### 🎬 Modern 4K Stock Video")
+        st.markdown(f"- [📹 **Pexels Free Videos**](https://www.pexels.com/search/videos/{encoded_q}/)")
+        st.markdown(f"- [🎞️ **Pixabay Free Videos**](https://pixabay.com/videos/search/{encoded_q}/)")
+        st.markdown(f"- [🎥 **Videezy Free Clips**](https://www.videezy.com/free-video/{encoded_q})")
+
+    with c3:
+        st.markdown("### 🚀 Space & Cosmology")
+        st.markdown(f"- [🪐 **NASA Video Library**](https://images.nasa.gov/search-results?q={encoded_q}&page=1&media=video)")
+        st.markdown(f"- [✨ **Hubble & Webb Archive**](https://archive.org/details/nasa)")
